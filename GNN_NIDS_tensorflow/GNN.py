@@ -9,12 +9,10 @@ class GNN(tf.keras.Model):
         # All the Hyperparameters can be found in the config.ini file
         self.config = config
 
-        # UPDATE FUNCTIONS (implemented as GRU Cells)
+        # GRU Cells used in the Message Passing step
         self.ip_update = tf.keras.layers.GRUCell(int(self.config['HYPERPARAMETERS']['node_state_dim']), name='update_ip')
         self.connection_update = tf.keras.layers.GRUCell(int(self.config['HYPERPARAMETERS']['node_state_dim']), name='update_connection')
 
-        # MESSAGE FUNCTIONS
-        # message function for the connection nodes (implemented as simple MLPs)
         self.message_func1 = tf.keras.Sequential(
             [
                 tf.keras.layers.Input(shape=int(self.config['HYPERPARAMETERS']['node_state_dim'])*2 ),
@@ -23,7 +21,6 @@ class GNN(tf.keras.Model):
                                       activation=tf.nn.relu)
             ]
         )
-        # message function for the connection nodes (implemented as simple MLPs)
         self.message_func2 = tf.keras.Sequential(
             [
                 tf.keras.layers.Input(shape=int(self.config['HYPERPARAMETERS']['node_state_dim'])*2 ),
@@ -33,14 +30,14 @@ class GNN(tf.keras.Model):
             ]
         )
 
-        # READOUT FUNCTION
-        # It takes as input the connection states, and outputs a prediction for each of them (one hot encoding)
+
+        # Readout Neural Network. It expects as input the path states and outputs the per-path delay
         self.readout = tf.keras.Sequential([
             tf.keras.layers.Input(shape=int(self.config['HYPERPARAMETERS']['node_state_dim'])),
-            tf.keras.layers.Dense(256,
-                                activation=tf.nn.relu),
-            tf.keras.layers.Dropout(0.5),
             tf.keras.layers.Dense(128,
+                                  activation=tf.nn.relu),
+            tf.keras.layers.Dropout(0.5),
+            tf.keras.layers.Dense(64,
                                   activation=tf.nn.relu),
             tf.keras.layers.Dropout(0.5),
             tf.keras.layers.Dense(15, activation = tf.nn.softmax)
@@ -51,7 +48,7 @@ class GNN(tf.keras.Model):
         # connection features
         feature_connection = tf.squeeze(inputs['feature_connection'])
 
-        # number of ips
+        # number of ip
         n_ips = inputs['n_i']
 
         # number of connections
@@ -65,16 +62,17 @@ class GNN(tf.keras.Model):
 
         # CREATE THE IP NODES
         #Encode only ones in the IP states
-        ip_state = tf.ones((n_ips, 128))
+        ip_state = tf.ones((n_ips, int(self.config['HYPERPARAMETERS']['node_state_dim'])))
+
 
         # CREATE THE CONNECTION NODES
-        # Compute the shape for the  all-zero tensor for the connection nodes
+        # Compute the shape for the  all-zero tensor for link_state
         shape = tf.stack([
             n_connections,
             int(self.config['HYPERPARAMETERS']['node_state_dim']) - 26
         ], axis=0)
 
-        # Initialize the initial hidden state for connection nodes
+        # Initialize the initial hidden state for id nodes
         connection_state = tf.concat([
             feature_connection,
             tf.zeros(shape)
@@ -82,6 +80,7 @@ class GNN(tf.keras.Model):
 
 
         # MESSAGE PASSING: ALL with ALL simoultaniously
+        # We simply use sum aggregation for all, RNN for the update. The messages are formed with the source and edge parameters (NN)
         # Iterate t times doing the message passing
         for _ in range(int(self.config['HYPERPARAMETERS']['t'])):
             # IP to CONNECTION
@@ -90,7 +89,7 @@ class GNN(tf.keras.Model):
             connection_gather = tf.gather(connection_state, dst_ip_to_connection)
             connection_gather = tf.squeeze(connection_gather)
             ip_gather = tf.squeeze(ip_node_gather)
-
+            
             # apply the message function on the ip nodes
             nn_input = tf.concat([ip_gather, connection_gather], axis=1) #([port1, ... , portl, param1, ..., paramk])
             nn_input = tf.ensure_shape(nn_input,[None, int(self.config['HYPERPARAMETERS']['node_state_dim'])*2])
@@ -116,15 +115,15 @@ class GNN(tf.keras.Model):
 
 
             # UPDATE (both IP and connection simoultaniously)
-            #update the ip nodes (using a GRU cell)
+            #update of ip nodes
             connection_mean = tf.ensure_shape(connection_mean, [None, int(self.config['HYPERPARAMETERS']['node_state_dim'])])
             ip_state, _ = self.ip_update(connection_mean, [ip_state])
             
-            #update the connection nodes (using a GRU cell)
+            #update of connection nodes
             ip_mean = tf.ensure_shape(ip_mean, [None, int(self.config['HYPERPARAMETERS']['node_state_dim'])])
             connection_state, _ = self.connection_update(ip_mean, [connection_state])
 
-        # pass each of the states of the connection nodes through the readout (to compute each of its labels)
+        # apply the feed-forward nn
         nn_output = self.readout(connection_state)
         return nn_output
 
