@@ -1,0 +1,85 @@
+# Definition of the entities
+entities:
+- name: ip
+  state_dimension: STATE_DIMENSION
+  initial_state:
+    - type: build_state
+      input: [$ip_feats]
+- name: connection
+  state_dimension: STATE_DIMENSION
+  initial_state:
+    - type: build_state
+      input: [$conect_feats]
+
+# Definition of the message passing phase
+message_passing:
+  num_iterations: T
+  stages:
+    # STAGE 1:
+    - stage_message_passings:
+      # IP TO CONNECTION
+      - destination_entity: connection
+        source_entities:
+          - name: ip
+            message:
+              - type: neural_network
+                nn_name: message_func
+                input: [source, destination]
+        aggregation:
+          - type: mean
+        update:
+          type: neural_network
+          nn_name: update_function
+
+      # CONNECTION TO IP
+      - destination_entity: ip
+        source_entities:
+          - name: connection
+            message:
+              - type: neural_network
+                nn_name: message_func
+                input: [source, destination]
+        aggregation:
+          - type: mean
+        update:
+          type: neural_network
+          nn_name: update_function
+
+# Definition of the readout
+readout:
+- type: neural_network
+  input: [connection]
+  nn_name: readout_model
+  output_label: [$Label]
+
+# Definition of the Neural Networks
+neural_networks:
+# Feed forward model
+- nn_name: readout_model
+  nn_architecture:
+  - type_layer: Dense
+    units: STATE_DIMENSION
+    activation: relu
+  - type_layer: Dropout
+    rate: 0.5
+  - type_layer: Dense
+    units: HIDDEN_DIMENSION
+    activation: relu
+  - type_layer: Dropout
+    rate: 0.5
+  - type_layer: Dense
+    units: OUTPUT_UNITS
+    activation: softmax
+
+- nn_name: message_func
+  nn_architecture:
+  - type_layer: Dropout
+    rate: 0.5
+  - type_layer: Dense
+    units: STATE_DIMENSION
+    activation: relu
+
+# RNN model
+- nn_name: update_function
+  nn_architecture:
+  - type_layer: GRU
