@@ -1,6 +1,6 @@
 # GNN-NIDS
 
-Link to paper: [Unveiling the potential of Graph Neural Networks for robust Intrusion Detection]()
+Link to paper: [Unveiling the potential of Graph Neural Networks for robust Intrusion Detection](https://arxiv.org/pdf/2107.14756.pdf)
 
 David Pujol-Perich, José Suárez-Varela, Albert Cabellos-Aparicio, Pere Barlet-Ros
 
