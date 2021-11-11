@@ -2,7 +2,7 @@
 train_dataset: ./data/train
 validation_dataset: ./data/eval
 
-load_model_path: ./CheckPoint/experiment_2021_11_08_17_21_38/ckpt/weights.39-0.013
+load_model_path: ./CheckPoint/experiment_2021_11_10_17_49_52/ckpt/weights.31-0.021
 additional_functions_file: ./main.py
 output_path: ./
 
